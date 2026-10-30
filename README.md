@@ -104,12 +104,30 @@ npm run dev
 # → http://localhost:5173
 ```
 
-### Run tests
+### Run unit tests (backend)
 
 ```bash
 cd backend
 ./mvnw test
 ```
+
+### Run E2E tests (Playwright)
+
+Requires the full stack running (`docker compose up` or local dev servers on `:3000` / `:8080`).
+
+```bash
+cd e2e
+npm install
+npx playwright test
+```
+
+After the run, open the HTML report with screenshots and videos:
+
+```bash
+npx playwright show-report
+```
+
+See [`e2e/TEST-EVIDENCE.md`](e2e/TEST-EVIDENCE.md) for a description of all 18 test scenarios and their expected outcomes.
 
 ---
 
