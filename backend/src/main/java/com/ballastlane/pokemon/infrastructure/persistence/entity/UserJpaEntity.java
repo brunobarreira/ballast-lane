@@ -10,7 +10,6 @@ import java.util.UUID;
 public class UserJpaEntity {
 
     @Id
-    @Column(columnDefinition = "uuid")
     private UUID id;
 
     @Column(unique = true, nullable = false)

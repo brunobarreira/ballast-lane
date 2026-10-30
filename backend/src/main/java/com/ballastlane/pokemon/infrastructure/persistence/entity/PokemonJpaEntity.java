@@ -13,7 +13,6 @@ import java.util.UUID;
 public class PokemonJpaEntity {
 
     @Id
-    @Column(columnDefinition = "uuid")
     private UUID id;
 
     @Column(name = "pokeapi_id", unique = true, nullable = false)
@@ -36,11 +35,11 @@ public class PokemonJpaEntity {
     private String region;
 
     @JdbcTypeCode(SqlTypes.JSON)
-    @Column(columnDefinition = "jsonb")
+    @Column
     private List<String> tags;
 
     @JdbcTypeCode(SqlTypes.JSON)
-    @Column(columnDefinition = "jsonb")
+    @Column
     private List<String> skills;
 
     @Column(name = "updated_at")
