@@ -206,6 +206,28 @@ All errors follow [RFC 9457 Problem Details](https://www.rfc-editor.org/rfc/rfc9
 
 ---
 
+## Highlights — Beyond the Requirements
+
+These items were not explicitly required but were added to improve quality and demonstrate best practices:
+
+| Highlight | Detail |
+|-----------|--------|
+| **Spring Boot 4.0** | Latest major release, requires Spring Framework 7 and Java 21 |
+| **Flyway migrations** | Versioned schema (V1/V2) instead of `ddl-auto: create` — production-safe |
+| **RFC 9457 Problem Details** | Standard error format with `title`, `status`, `detail` fields |
+| **Upsert on sync** | Syncing the same Pokémon twice updates it instead of duplicating |
+| **Official artwork sprites** | Detail page uses high-res artwork; list uses the small sprite |
+| **Color-coded stat bars** | HP → green, Attack → red, Defense → blue, Speed → yellow, etc. |
+| **Clickable evolution chain** | Navigate between evolutions directly from the detail page |
+| **TanStack Query** | Client-side cache with `staleTime: 5min` — avoids redundant API calls |
+| **Toast notifications** | Inline feedback for sync success/error instead of `window.alert()` |
+| **Confirmation modal** | Custom delete confirmation instead of `window.confirm()` |
+| **H2 for tests** | Unit and integration tests run without PostgreSQL — CI-friendly |
+| **CORS configured** | Allows any origin, ready for separate frontend deployment |
+| **Docker health check** | Backend waits for Postgres to be ready before starting |
+
+---
+
 ## Thought Process
 
 ### Why Clean Architecture?
