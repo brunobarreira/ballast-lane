@@ -44,21 +44,21 @@ com.ballastlane.pokemon
 
 ## Quick Start — Docker Compose
 
-**Prerequisites:** Docker + Docker Compose
+**Prerequisites:** Docker 20+ with Compose v2 (bundled with Docker Desktop)
 
 ```bash
-git clone <repo-url>
+git clone https://github.com/brunobarreira/ballast-lane.git
 cd ballast-lane
-docker compose up
+docker compose up --build
 ```
+
+> First run takes ~2–3 minutes: Docker pulls images, builds the backend and frontend, and runs Flyway migrations. The backend automatically seeds **20 Pokémon** and **2 user accounts** on startup.
 
 | Service | URL |
 |---------|-----|
 | Frontend | http://localhost:3000 |
 | Backend API | http://localhost:8080 |
 | PostgreSQL | localhost:5432 |
-
-On first startup, the backend seeds **20 Pokémon** and **2 user accounts** automatically.
 
 ### Demo Credentials
 
@@ -113,11 +113,13 @@ cd backend
 
 ### Run E2E tests (Playwright)
 
-Requires the full stack running (`docker compose up` or local dev servers on `:3000` / `:8080`).
+**Prerequisites:** Node 20+, Google Chrome installed, full stack running on `:3000` / `:8080`.
 
 ```bash
+# from the repo root
 cd e2e
 npm install
+npx playwright install chrome   # first time only
 npx playwright test
 ```
 
