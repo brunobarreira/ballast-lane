@@ -2,10 +2,10 @@
 
 ## The Prompt I Used
 
-I used **Claude Code** (Anthropic's official CLI for Claude) as my primary GenAI tool throughout this project. For the task management API scenario, I would use the following prompt:
+I used **Claude Code** (Anthropic's official CLI for Claude) as my primary GenAI tool throughout this project. The following prompt captures how I drove the initial scaffolding of the Pokémon API:
 
 ```
-Build a RESTful Task Management API in Java 21 with Spring Boot 4 following Clean Architecture.
+Build a RESTful Pokémon API in Java 21 with Spring Boot 4 following Clean Architecture.
 
 Requirements:
 - CRUD endpoints for tasks (title, description, status enum [TODO/IN_PROGRESS/DONE], due_date)
