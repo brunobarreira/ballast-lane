@@ -1,13 +1,29 @@
+import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { fetchPokemonDetail, syncPokemon } from '../api/pokemon';
 import { useAuth } from '../contexts/AuthContext';
+
+function Toast({ message, type }: { message: string; type: 'success' | 'error' }) {
+  return (
+    <div className={`fixed bottom-6 right-6 z-50 px-5 py-3 rounded-xl shadow-lg text-white font-medium transition-all
+      ${type === 'success' ? 'bg-green-600' : 'bg-red-600'}`}>
+      {type === 'success' ? '✅' : '❌'} {message}
+    </div>
+  );
+}
 
 export default function PokemonDetailPage() {
   const { nameOrId } = useParams<{ nameOrId: string }>();
   const navigate = useNavigate();
   const { isAuthenticated } = useAuth();
   const queryClient = useQueryClient();
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+
+  const showToast = (message: string, type: 'success' | 'error') => {
+    setToast({ message, type });
+    setTimeout(() => setToast(null), 3000);
+  };
 
   const { data, isLoading, isError } = useQuery({
     queryKey: ['pokemon-detail', nameOrId],
@@ -19,9 +35,9 @@ export default function PokemonDetailPage() {
     mutationFn: () => syncPokemon(nameOrId!),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['local-pokemon'] });
-      alert(`${nameOrId} synced to your local database!`);
+      showToast(`${nameOrId} synced to your database!`, 'success');
     },
-    onError: () => alert('Failed to sync Pokémon'),
+    onError: () => showToast('Failed to sync Pokémon', 'error'),
   });
 
   if (isLoading) return (
@@ -44,6 +60,7 @@ export default function PokemonDetailPage() {
 
   return (
     <div className="max-w-3xl mx-auto px-4 py-8">
+      {toast && <Toast message={toast.message} type={toast.type} />}
       <button onClick={() => navigate(-1)} className="text-blue-600 hover:underline mb-4 block">← Back</button>
 
       <div className="bg-white rounded-2xl shadow-md p-6">

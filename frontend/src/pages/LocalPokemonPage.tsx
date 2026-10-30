@@ -4,6 +4,34 @@ import { fetchLocalPokemon, updateLocalPokemon, deleteLocalPokemon } from '../ap
 import type { LocalPokemon } from '../types';
 import { useNavigate } from 'react-router-dom';
 
+function ConfirmModal({ name, onConfirm, onCancel }: { name: string; onConfirm: () => void; onCancel: () => void }) {
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 px-4">
+      <div className="bg-white rounded-2xl shadow-xl p-6 w-full max-w-sm text-center">
+        <div className="text-4xl mb-3">🗑️</div>
+        <h2 className="text-lg font-bold mb-2">Remove Pokémon?</h2>
+        <p className="text-gray-500 text-sm mb-6 capitalize">
+          Remove <strong>{name}</strong> from your local database?
+        </p>
+        <div className="flex gap-3">
+          <button
+            onClick={onConfirm}
+            className="flex-1 bg-red-600 hover:bg-red-700 text-white py-2 rounded-lg font-semibold transition-colors"
+          >
+            Remove
+          </button>
+          <button
+            onClick={onCancel}
+            className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 py-2 rounded-lg transition-colors"
+          >
+            Cancel
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function EditModal({ pokemon, onClose }: { pokemon: LocalPokemon; onClose: () => void }) {
   const [localName, setLocalName] = useState(pokemon.localName || '');
   const [region, setRegion] = useState(pokemon.region || '');
@@ -80,6 +108,7 @@ function EditModal({ pokemon, onClose }: { pokemon: LocalPokemon; onClose: () =>
 
 export default function LocalPokemonPage() {
   const [editing, setEditing] = useState<LocalPokemon | null>(null);
+  const [deleting, setDeleting] = useState<LocalPokemon | null>(null);
   const queryClient = useQueryClient();
   const navigate = useNavigate();
 
@@ -106,6 +135,13 @@ export default function LocalPokemonPage() {
   return (
     <div className="max-w-6xl mx-auto px-4 py-8">
       {editing && <EditModal pokemon={editing} onClose={() => setEditing(null)} />}
+      {deleting && (
+        <ConfirmModal
+          name={deleting.name}
+          onConfirm={() => { deleteMutation.mutate(deleting.id); setDeleting(null); }}
+          onCancel={() => setDeleting(null)}
+        />
+      )}
       <h1 className="text-3xl font-bold text-gray-800 mb-2">My Pokémon</h1>
       <p className="text-gray-500 mb-6">{data?.length ?? 0} Pokémon synced to local database</p>
 
@@ -144,11 +180,7 @@ export default function LocalPokemonPage() {
                 Edit
               </button>
               <button
-                onClick={() => {
-                  if (confirm(`Remove ${pokemon.name} from local database?`)) {
-                    deleteMutation.mutate(pokemon.id);
-                  }
-                }}
+                onClick={() => setDeleting(pokemon)}
                 className="text-xs bg-red-100 hover:bg-red-200 text-red-700 px-3 py-1 rounded-lg transition-colors"
               >
                 Delete
