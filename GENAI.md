@@ -1,4 +1,4 @@
-# Generative AI Tools — Task Management API
+# Generative AI Tools — Pokémon API
 
 ## The Prompt I Used
 
