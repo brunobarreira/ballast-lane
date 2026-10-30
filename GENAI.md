@@ -1,4 +1,4 @@
-# Generative AI Tools — Pokémon API
+# Generative AI Tools
 
 ## The Prompt I Used
 
