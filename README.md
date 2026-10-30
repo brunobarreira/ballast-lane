@@ -60,12 +60,68 @@ docker compose up --build
 | Backend API | http://localhost:8080 |
 | PostgreSQL | localhost:5432 |
 
+**Run in background (detached mode):**
+
+```bash
+docker compose up --build -d
+```
+
+**Follow logs:**
+
+```bash
+docker compose logs -f backend   # backend only
+docker compose logs -f           # all services
+```
+
+**Verify the backend is ready:**
+
+```bash
+curl http://localhost:8080/api/pokemon?page=0&size=1
+# Should return a JSON response with Pokémon data
+```
+
+**Stop the application:**
+
+```bash
+docker compose down          # stop containers, keep database volume
+docker compose down -v       # stop containers AND wipe the database
+```
+
 ### Demo Credentials
 
 | Username | Password | Role |
 |----------|----------|------|
 | `trainer` | `trainer123` | USER |
 | `admin` | `admin123` | ADMIN |
+
+---
+
+## Troubleshooting
+
+**Ports already in use (3000, 8080 or 5432):**
+
+Stop whatever is using the port, or edit `docker-compose.yml` to map to different host ports (e.g. `"3001:80"`).
+
+**Backend fails to connect to the database on first start:**
+
+The Docker health check should handle this, but if it doesn't:
+
+```bash
+docker compose down && docker compose up --build
+```
+
+**Want to reset the database and re-seed:**
+
+```bash
+docker compose down -v   # wipes the postgres volume
+docker compose up --build
+```
+
+**`./mvnw` permission denied (local dev):**
+
+```bash
+chmod +x backend/mvnw
+```
 
 ---
 
