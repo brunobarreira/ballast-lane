@@ -7,6 +7,7 @@ import com.ballastlane.pokemon.domain.port.PokeApiPort;
 import com.ballastlane.pokemon.presentation.exception.PokeApiException;
 import com.ballastlane.pokemon.presentation.exception.ResourceNotFoundException;
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.WebClient;
 import org.springframework.web.reactive.function.client.WebClientResponseException;
@@ -17,9 +18,11 @@ import java.util.*;
 public class PokeApiAdapter implements PokeApiPort {
 
     private final WebClient webClient;
+    private final ObjectMapper objectMapper;
 
-    public PokeApiAdapter(WebClient webClient) {
+    public PokeApiAdapter(WebClient webClient, ObjectMapper objectMapper) {
         this.webClient = webClient;
+        this.objectMapper = objectMapper;
     }
 
     @Override
@@ -107,7 +110,6 @@ public class PokeApiAdapter implements PokeApiPort {
     private List<String> fetchEvolutionChain(String url) {
         if (url == null || url.isBlank()) return List.of();
         try {
-            // Extract relative path from full URL
             String path = url.replace("https://pokeapi.co/api/v2", "");
             JsonNode chain = get(path);
             List<String> names = new ArrayList<>();
@@ -128,11 +130,12 @@ public class PokeApiAdapter implements PokeApiPort {
 
     private JsonNode get(String path) {
         try {
-            return webClient.get()
+            String body = webClient.get()
                 .uri(path)
                 .retrieve()
-                .bodyToMono(JsonNode.class)
+                .bodyToMono(String.class)
                 .block();
+            return objectMapper.readTree(body);
         } catch (WebClientResponseException.NotFound e) {
             throw new ResourceNotFoundException("Pokemon not found: " + path);
         } catch (WebClientResponseException e) {
