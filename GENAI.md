@@ -2,19 +2,25 @@
 
 ## The Prompt I Used
 
-I used **Claude Code** (Anthropic's official CLI for Claude) as my primary GenAI tool throughout this project. The following prompt captures how I drove the initial scaffolding of the Pokémon API:
+I used **Claude Code** (Anthropic's official CLI for Claude) as my primary GenAI tool throughout this project. The following prompt captures how I drove the initial scaffolding:
 
 ```
-Build a RESTful Pokémon API in Java 21 with Spring Boot 4 following Clean Architecture.
+Build a full-stack Pokémon API in Java 21 with Spring Boot 4 and a React 18 + TypeScript frontend,
+following Clean Architecture and TDD principles.
 
 Requirements:
-- CRUD endpoints for tasks (title, description, status enum [TODO/IN_PROGRESS/DONE], due_date)
-- Each task belongs to a User (User entity already exists with id, username, email)
-- JWT authentication — POST /api/auth/login returns a token; all task endpoints require Bearer token
-- GET /api/tasks lists only the authenticated user's tasks
-- Validation: title required (max 100 chars), status must be a valid enum, due_date must be in the future
-- Error handling: 404 for missing task, 400 for validation errors, 403 if user tries to modify another user's task
-- Use Clean Architecture: domain entities/ports in a pure Java layer, use cases in the application layer, JPA adapters in infrastructure, controllers in presentation
+- Integrate with the public PokéAPI (https://pokeapi.co) to fetch paginated Pokémon lists and detail views
+- Persist a local copy of Pokémon to PostgreSQL; allow authenticated users to annotate with localName, region and tags
+- JWT authentication — POST /api/auth/login returns a token; sync/update/delete endpoints require Bearer token
+- GET /api/pokemon?page=0&size=20 returns paginated list with sprite, category, mass and skills — cache with Caffeine (10 min TTL)
+- GET /api/pokemon/{nameOrId} returns full detail: image, stats, description, evolution chain
+- POST /api/pokemon/{nameOrId}/sync fetches from PokéAPI and upserts to local DB
+- PUT /api/pokemon/local/{id} updates localName, region and tags (404 if missing, 400 if invalid)
+- DELETE /api/pokemon/local/{id} removes the local record
+- Use Clean Architecture: domain entities/ports in a pure Java layer, use cases in application layer,
+  JPA + WebClient adapters in infrastructure, controllers in presentation
+- Frontend: React Router, TanStack Query, Tailwind CSS, protected routes, custom Toast and ConfirmModal components
+- Docker Compose with postgres + backend + frontend; seed 20 Pokémon and 2 users on startup
 
 Structure the response as individual files per layer. Include unit tests for all use cases using JUnit 5 + Mockito.
 ```
@@ -26,21 +32,23 @@ Structure the response as individual files per layer. Include unit tests for all
 Claude Code generated the following domain entity (representative sample):
 
 ```java
-// domain/entity/Task.java
-package com.example.tasks.domain.entity;
+// domain/entity/Pokemon.java
+package com.ballastlane.pokemon.domain.entity;
 
-import java.time.LocalDate;
+import java.util.List;
 import java.util.UUID;
 
-public class Task {
+public class Pokemon {
     private UUID id;
-    private String title;
-    private String description;
-    private Status status;
-    private LocalDate dueDate;
-    private UUID userId;
-
-    public enum Status { TODO, IN_PROGRESS, DONE }
+    private int pokeapiId;
+    private String name;
+    private String localName;
+    private String category;
+    private int massHg;
+    private String spriteUrl;
+    private String region;
+    private List<String> tags;
+    private List<String> skills;
 
     // constructor, getters, setters...
 }
@@ -49,29 +57,28 @@ public class Task {
 And the corresponding use case:
 
 ```java
-// application/usecase/CreateTaskUseCase.java
+// application/usecase/SyncPokemonUseCase.java
 @Service
-public class CreateTaskUseCase {
+public class SyncPokemonUseCase {
 
-    private final TaskRepository taskRepository;
+    private final PokeApiPort pokeApiPort;
+    private final PokemonRepository pokemonRepository;
 
-    public CreateTaskUseCase(TaskRepository taskRepository) {
-        this.taskRepository = taskRepository;
+    public SyncPokemonUseCase(PokeApiPort pokeApiPort, PokemonRepository pokemonRepository) {
+        this.pokeApiPort = pokeApiPort;
+        this.pokemonRepository = pokemonRepository;
     }
 
-    public Task execute(CreateTaskRequest request, UUID authenticatedUserId) {
-        if (request.dueDate() != null && request.dueDate().isBefore(LocalDate.now())) {
-            throw new ValidationException("Due date must be in the future");
-        }
-        Task task = new Task(
-            UUID.randomUUID(),
-            request.title(),
-            request.description(),
-            Task.Status.TODO,
-            request.dueDate(),
-            authenticatedUserId
-        );
-        return taskRepository.save(task);
+    public Pokemon execute(String nameOrId) {
+        Pokemon fetched = pokeApiPort.getPokemonListItem(nameOrId);
+        return pokemonRepository.findByPokeapiId(fetched.getPokeapiId())
+            .map(existing -> {
+                existing.setName(fetched.getName());
+                existing.setSpriteUrl(fetched.getSpriteUrl());
+                existing.setSkills(fetched.getSkills());
+                return pokemonRepository.save(existing);
+            })
+            .orElseGet(() -> pokemonRepository.save(fetched));
     }
 }
 ```
@@ -79,26 +86,30 @@ public class CreateTaskUseCase {
 The controller layer:
 
 ```java
+// presentation/controller/PokemonController.java
 @RestController
-@RequestMapping("/api/tasks")
-public class TaskController {
+@RequestMapping("/api/pokemon")
+public class PokemonController {
 
-    private final CreateTaskUseCase createTaskUseCase;
-    private final ListUserTasksUseCase listUserTasksUseCase;
-    // ...
-
-    @PostMapping
-    @ResponseStatus(HttpStatus.CREATED)
-    public TaskDto create(@Valid @RequestBody CreateTaskRequest request,
-                          @AuthenticationPrincipal String username) {
-        UUID userId = resolveUserId(username);
-        return taskMapper.toDto(createTaskUseCase.execute(request, userId));
-    }
+    private final ListPokemonUseCase listPokemonUseCase;
+    private final GetPokemonDetailUseCase getDetailUseCase;
+    private final SyncPokemonUseCase syncUseCase;
 
     @GetMapping
-    public List<TaskDto> list(@AuthenticationPrincipal String username) {
-        return listUserTasksUseCase.execute(resolveUserId(username))
-            .stream().map(taskMapper::toDto).toList();
+    public PokemonPageResponse list(@RequestParam(defaultValue = "0") int page,
+                                    @RequestParam(defaultValue = "20") int size) {
+        return listPokemonUseCase.execute(page, size);
+    }
+
+    @GetMapping("/{nameOrId}")
+    public PokemonDetailDto detail(@PathVariable String nameOrId) {
+        return getDetailUseCase.execute(nameOrId);
+    }
+
+    @PostMapping("/{nameOrId}/sync")
+    @ResponseStatus(HttpStatus.CREATED)
+    public LocalPokemonDto sync(@PathVariable String nameOrId) {
+        return pokemonMapper.toLocalDto(syncUseCase.execute(nameOrId));
     }
 }
 ```
@@ -108,31 +119,30 @@ public class TaskController {
 ## How I Validated the AI's Suggestions
 
 ### 1. Architecture review
-The AI correctly separated concerns across layers but initially placed validation logic inside the JPA entity — a common mistake that violates Clean Architecture's rule that domain entities should not depend on framework concerns. I corrected this by moving validation to the use case layer where it belongs, making it independently testable without Spring context.
+The AI correctly separated concerns across layers but initially placed validation logic inside the JPA entity — a violation of Clean Architecture's rule that domain entities must not depend on framework concerns. I moved validation to the use case layer, making it independently testable without a Spring context.
 
 ### 2. Compilation and type safety
-I ran `mvn compile` immediately on generated code. The AI occasionally used Spring Boot 3.x APIs when I was targeting Spring Boot 4.x (e.g., `@MockBean` instead of `@MockitoBean`, `@WebMvcTest` which was removed in Boot 4.0). I corrected these by replacing with `MockMvcBuilders.standaloneSetup()` for controller tests.
+I ran `mvn compile` immediately on generated code. The AI occasionally used Spring Boot 3.x APIs when targeting Spring Boot 4.x (e.g., `@MockBean` instead of `@MockitoBean`, `@WebMvcTest` which was removed in Boot 4.0). I corrected these by replacing controller tests with `MockMvcBuilders.standaloneSetup()`.
 
-### 3. Security gap caught and fixed
-The AI's initial `GET /api/tasks` implementation didn't filter by the authenticated user — it listed **all** tasks. This is a critical authorization bug. I added the `authenticatedUserId` parameter extracted from the JWT `SecurityContextHolder` and passed it to the use case, which filtered results in the repository query:
+### 3. WebClient deserialization bug caught and fixed
+The AI's `PokeApiAdapter` used `bodyToMono(JsonNode.class)` which throws a type definition error under Spring Boot 4's WebFlux + Jackson configuration. I fixed it by switching to `bodyToMono(String.class)` and deserializing manually via `objectMapper.readTree(body)`:
 
 ```java
-// corrected repository query
-List<Task> findByUserId(UUID userId);
+// fixed deserialization in PokeApiAdapter
+return webClient.get().uri(url)
+    .retrieve()
+    .bodyToMono(String.class)
+    .map(body -> objectMapper.readTree(body));
 ```
 
 ### 4. Missing edge cases I added
-- **Future date validation**: AI generated `dueDate != null` check but didn't validate the date was in the future. Added `dueDate.isBefore(LocalDate.now())` guard.
-- **Ownership check on update/delete**: AI generated `PUT /api/tasks/{id}` without verifying the task belonged to the requesting user. Added 403 response:
-  ```java
-  if (!task.getUserId().equals(authenticatedUserId)) {
-      throw new ForbiddenException("You cannot modify another user's task");
-  }
-  ```
-- **Enum deserialization**: AI used `String` for status in the DTO, which allowed any value through. Switched to `@JsonCreator` with proper enum mapping to return 400 on invalid status values.
+- **Upsert on sync**: AI generated a plain `save()` that would duplicate records on repeated sync. Added `findByPokeapiId` lookup to update the existing row instead.
+- **H2 compatibility**: AI used `columnDefinition = "jsonb"` and `columnDefinition = "uuid"` in JPA entities, which breaks H2 in tests. Removed both — Hibernate picks the correct types per dialect.
+- **Toast instead of `window.alert()`**: AI generated `alert()` calls for sync feedback. Replaced with an inline `Toast` component (3-second auto-dismiss).
+- **ConfirmModal instead of `window.confirm()`**: AI generated `confirm()` for delete. Replaced with a custom modal with "Remove" and "Cancel" buttons.
 
 ### 5. Test coverage verification
-The AI generated tests but some mocked at too high a level (testing the controller calling the mock service instead of testing the actual business rule). I refactored unit tests to target use cases in isolation, ensuring each test verifies a specific business invariant rather than just "the method was called."
+The AI generated tests but some mocked at too high a level (verifying "the method was called" rather than the actual business rule). I refactored unit tests to target use cases in isolation, ensuring each test verifies a specific invariant — e.g., that syncing an already-existing Pokémon updates the record instead of inserting a duplicate.
 
 ---
 
@@ -144,11 +154,10 @@ The AI generated tests but some mocked at too high a level (testing the controll
 - Writing comprehensive test stubs that I can refine
 
 **Where human review is essential:**
-- Authorization logic (who owns what data) — AI often misses multi-tenancy concerns
-- API versioning and backwards compatibility decisions
-- Performance implications (N+1 queries, missing indexes) — AI rarely adds `@Index` annotations
-- Framework version compatibility — AI training data lags behind latest releases
-- Business rule edge cases specific to the domain
+- Framework version compatibility — AI training data lags behind latest releases (Boot 3 vs Boot 4 breaking changes)
+- Integration edge cases (WebClient + Jackson, H2 vs PostgreSQL dialect differences)
+- UI behaviour — AI defaults to native browser dialogs (`alert`, `confirm`) instead of custom components
+- Upsert vs insert semantics — AI defaults to simple `save()` without idempotency checks
 
 **My workflow with Claude Code:**
 I used plan mode first to align on architecture before any code generation. This prevented the most common AI mistake: generating code that works locally but violates the intended architectural boundaries. I treated AI output as a *first draft* to review and refine, not a final answer.
